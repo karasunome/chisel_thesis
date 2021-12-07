@@ -1,3 +1,13 @@
+######## Şafak
+
+https://inst.eecs.berkeley.edu/~cs250/sp17/handouts/chisel-cheatsheet3.pdf
+
+http://caxapa.ru/thumbs/441444/tutorial.pdf
+
+https://github.com/hplp/aes_chisel/blob/master/src/main/scala/aes/AES.scala
+
+
+
 Chisel Project Template
 =======================
 
