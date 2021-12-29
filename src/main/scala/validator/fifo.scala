@@ -56,3 +56,7 @@ class myFifo(val w : Int, val depth : Int) extends Module {
   io.full := (depth.U === count)
   io.empty := (count === 0.U)
 }
+
+object myFifo {
+  def apply(val w : Int, val depth : Int)
+}
