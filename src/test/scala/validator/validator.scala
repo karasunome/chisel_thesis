@@ -8,19 +8,17 @@ import org.scalatest.FreeSpec
 import chisel3.experimental.BundleLiterals._
 
 class ValidatorSpec extends FreeSpec with ChiselScalatestTester {
-  in {
-    test(new validator(64, 8)) { c =>
+  "Validator module tester application" in {
+    test(new validator(8, 8)) { c =>
       c.io.wr.poke(true.B)
       c.io.rd.poke(false.B)
-      c.io.datain.poke(0x1)
-      c.io.datain.poke(0x2)
-      c.io.datain.poke(0x3)
-      c.io.datain.poke(0x4)
-      c.io.datain.poke(0x5)
-      c.io.datain.poke(0x6)
-      c.io.datain.poke(0x7)
-      c.io.datain.poke(0x8)
-      
+      c.io.datain.poke("h1".U(8.W))
+
+      c.io.wr.poke(true.B)
+      c.io.rd.poke(false.B)
+      c.io.datain.poke("h2".U(8.W))
+      //c.io.full.expect(true.B)
+      //c.io.empty.expect(false.B)
     }
   }
 }

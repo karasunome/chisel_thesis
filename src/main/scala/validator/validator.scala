@@ -26,6 +26,7 @@ class validator(val w : Int, val depth : Int) extends Module {
   }
 
   when(io.wr === true.B && io.rd === true.B) {
+    println("io.wr === true.B && io.rd === true.B")
     when(count === 0.U) { io.dataout := io.datain }
     .otherwise {
       io.dataout := mem(rp)
@@ -34,6 +35,7 @@ class validator(val w : Int, val depth : Int) extends Module {
       wp := IndexAdd(wp)
     } 
   } .elsewhen (io.wr === true.B && io.rd === false.B) {
+    println("io.wr === true.B && io.rd === false.B")
     io.dataout := 0.U
     when(count < depth.U) {
       mem(wp) := io.datain
@@ -54,6 +56,8 @@ class validator(val w : Int, val depth : Int) extends Module {
 
   io.full := (depth.U === count)
   io.empty := (count === 0.U)
+
+  printf("count = %d, empty = %d, full = %d\n", count, io.empty, io.full);
 }
 
 /*object myFifo {
