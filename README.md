@@ -1,3 +1,13 @@
+######## Şafak
+
+https://inst.eecs.berkeley.edu/~cs250/sp17/handouts/chisel-cheatsheet3.pdf
+
+http://caxapa.ru/thumbs/441444/tutorial.pdf
+
+https://github.com/hplp/aes_chisel/blob/master/src/main/scala/aes/AES.scala
+
+
+
 Chisel Project Template
 =======================
 
@@ -38,10 +48,9 @@ Once you have created a repository from this template and the `Template cleanup`
 Note that it is easiest to push to a repository if you set up SSH with Github, please see the [related documentation](https://docs.github.com/en/free-pro-team@latest/github/authenticating-to-github/connecting-to-github-with-ssh). SSH is required for pushing to a Github repository when using two-factor authentication.
 
 ```sh
-git clone git@github.com:%REPOSITORY%.git
-cd %NAME%
+git clone git@github.com:karasunome/chisel_thesis.git
+cd chisel_thesis
 ```
-(The variables wrapped in `%` will be filled in by the template cleanup) <!-- #REMOVE-ON-CLEANUP# -->
 
 #### Set project organization and name in build.sbt
 
@@ -62,7 +71,7 @@ For more information about a license, check out the [Github Docs](https://docs.g
 
 #### Commit your changes
 ```sh
-git commit -m 'Starting %NAME%'
+git commit -m 'Starting chisel_thesis'
 git push origin main
 ```
 
