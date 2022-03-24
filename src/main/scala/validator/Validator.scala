@@ -35,7 +35,7 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
     }
 
     /* create memory with depth and width */
-    val mem = Mem(depth, width)
+    val mem = SyncReadMem(depth, width)
 
     /* Here we set inc value to false and each time same memory 
      * position is returned in read and write pointers.
@@ -48,8 +48,6 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
     /* initialization full flag register */
     val full = RegInit(false.B)
 
-    printf("%d %d %d\n", writePtr, readPtr, full);
-
     /* when if input data is valid and fifo is
      * not full then write data into next pos in the memory
      * and then increment the position
@@ -59,7 +57,10 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
       full := (nextWrite === readPtr)
       incrWrite := true.B
     }
-    printf("%d %d %d\n", writePtr, readPtr, full);
+
+    val data = mem.read(readPtr)
+    printf(p"$readPtr, 0x${Hexadecimal(data.asUInt)}\n")
+    incrRead := true.B
 
     io.deq.bits :=  291.U
     io.enq.ready := true.B
