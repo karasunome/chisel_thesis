@@ -3,15 +3,6 @@ package validator
 import chisel3._
 import chisel3.util._
 
-/**
-  * enqueue and dequeue ports using the ready/valid interface
-  * with width.
-  */
-class ValidatorIO[T <: Data](width: T) extends Bundle {
-  val enq = Flipped(new DecoupledIO(width))
-  val deq = new DecoupledIO(width)
-}
-
 class Validator[T <: Data](width: T, depth: Int) extends Module {
     val io = IO(new ValidatorIO(width))
     class ValidatorIO[T <: Data](width: T) extends Bundle {
@@ -48,21 +39,31 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
     /* initialization full flag register */
     val full = RegInit(false.B)
 
-    /* when if input data is valid and fifo is
-     * not full then write data into next pos in the memory
-     * and then increment the position
+    /* when if enq data is valid and fifo is
+     * not full then write data into next pos into the memory
+     * and then increment the write pointer
      */
-    when (io.enq.valid && !full) {
-      mem.write(writePtr, io.enq.bits)
-      full := (nextWrite === readPtr)
-      incrWrite := true.B
+    when (!full) {
+      io.enq.ready := true.B
+      when (io.enq.valid) {
+        printf(p"$writePtr, 0x${Hexadecimal(io.enq.bits.asUInt)}\n")
+        mem.write(writePtr, io.enq.bits)
+        incrWrite := true.B
+        full := (nextWrite === 0.U)
+      }
+      io.deq.valid := false.B
+      io.deq.bits := 0.U
+    } otherwise {
+      io.enq.ready := false.B
+      when (io.deq.ready) {
+        val data = mem.read(readPtr)
+        printf(p"$readPtr, 0x${Hexadecimal(data.asUInt)}\n")
+        incrRead := true.B
+        io.deq.valid := true.B
+        io.deq.bits := data
+      } otherwise {
+        io.deq.valid := false.B
+        io.deq.bits := 0.U
+      }
     }
-
-    val data = mem.read(readPtr)
-    printf(p"$readPtr, 0x${Hexadecimal(data.asUInt)}\n")
-    incrRead := true.B
-
-    io.deq.bits :=  291.U
-    io.enq.ready := true.B
-    io.deq.valid := true.B
 }

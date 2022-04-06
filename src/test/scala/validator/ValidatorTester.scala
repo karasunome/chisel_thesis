@@ -5,20 +5,50 @@ import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
+  private val depth = 32
+
   def testFn[T <: Validator[_ <: Data]](dut: T) = {
     // Default values for all signals
-    val data = 0
+    dut.io.enq.bits.asUInt.poke(0x0.U)
+    dut.io.enq.valid.poke(false.B)
+    dut.io.deq.ready.poke(false.B)
+    dut.clock.step()
+  
+    // Fill the whole buffer
+    // memory depth available as dut.depth.
+    // When the whole memory is full,
+    // We expect deq.valid is false
+    // until deq.ready is true
+    var cnt = 1
+    dut.io.enq.valid.poke(true.B)
+    for (_ <- 0 until depth) {
+      dut.io.enq.bits.asUInt.poke(cnt.U)
+      if (dut.io.enq.ready.peek.litToBoolean)
+        cnt += 1
+      dut.clock.step()
+    }
+    println(s"Wrote ${cnt-1} words")
+    dut.io.enq.ready.expect(false.B)
+    dut.io.deq.valid.expect(false.B)
+    dut.io.deq.bits.asUInt.expect(0.U)
 
-    for (data <- 12345678 until 12345678+1024) {
-      dut.io.enq.bits.asUInt.poke(data)
-      dut.io.enq.valid.poke(true.B)
-      dut.io.deq.ready.poke(true.B)
+    println("Now read it back")
+    // Now read it back
+    var expected = 1
+    dut.io.enq.valid.poke(false.B)
+    dut.io.deq.ready.poke(true.B)
+
+    for (_ <- 0 until depth) {
+      if (dut.io.deq.valid.peek.litToBoolean) {
+        //dut.io.deq.bits.asUInt.expect(expected.U)
+        expected += 1
+      }
       dut.clock.step()
     }
   }
 
   "Validator Module" should "pass" in {
-    test(new Validator(UInt(64.W), 1024)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    test(new Validator(UInt(64.W), depth)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       testFn(dut)
     }
   }
