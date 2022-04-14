@@ -48,7 +48,7 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   "Validator Module" should "pass" in {
-    test(new Validator(UInt(64.W), depth)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    test(new Validator(UInt(128.W), depth)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       testFn(dut)
     }
   }

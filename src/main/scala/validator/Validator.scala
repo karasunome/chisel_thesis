@@ -26,7 +26,7 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
     }
 
     /* create memory with depth and width */
-    val mem = SyncReadMem(depth, width)
+    val mem = Mem(depth, width)
 
     /* Here we set inc value to false and each time same memory 
      * position is returned in read and write pointers.
@@ -41,7 +41,8 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
 
     /* when if enq data is valid and fifo is
      * not full then write data into next pos into the memory
-     * and then increment the write pointer
+     * and then increment the write pointer otherwise
+     * sets enqueue not ready state and give output from dequeue
      */
     when (!full) {
       io.enq.ready := true.B
