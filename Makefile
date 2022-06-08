@@ -4,7 +4,7 @@
 # sbt looks for default into a folder ./project and . for build.sdt and Build.scala
 # sbt creates per default a ./target folder
 
-SBT = sbt
+SBT = ~/2_safak_tez/sbt/sbt
 
 
 # Generate Verilog code
@@ -16,6 +16,9 @@ SBT = sbt
 
 test:
 	$(SBT) test
+
+build:
+	$(SBT) compile
 
 #fifo-view:
 #	gtkwave generated/simple.FifoTester823761309/BubbleFifo.vcd --save=bubble.gtkw
