@@ -3,12 +3,12 @@ package validator
 import chisel3._
 import chisel3.util._
 
-class ValidatorIO[T <: Data](width: T) extends Bundle {
+class ValidatorIO[T <: Data](width: UInt) extends Bundle {
   val enq = Flipped(new DecoupledIO(width))
   val deq = new DecoupledIO(width)
 }
 
-class Validator[T <: Data](width: T, depth: Int) extends Module {
+class Validator[T <: Data](width: UInt, depth: Int) extends Module {
 
   val io = IO(new ValidatorIO(width))
 
@@ -47,6 +47,11 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
 
   // initialization full flag register
   val full = RegInit(false.B)
+  val aes_mode = RegInit(0.U(2.W))
+  val input_vector = VecInit(Seq.fill(Params.StateLength)(0.U(8.W)))
+
+  aes.io.AES_mode := aes_mode
+  aes.io.input_text := input_vector
 
   // when if enq data is valid and fifo is
   // not full then write data into next pos into the memory
@@ -63,21 +68,33 @@ class Validator[T <: Data](width: T, depth: Int) extends Module {
     io.deq.valid := false.B
     io.deq.bits := 0.U
   } otherwise {
-    aes.io.AES_mode := 2.U
     io.enq.ready := false.B
 
     val data = mem.read(readPtr)
     incrRead := true.B
-    for (i <- 0 until Params.StateLength)
-    {
-      printf(p"$readPtr, 0x${Hexadecimal(data.asUInt)}\n")
+    val data2 = mem.read(readPtr)
+    incrRead := true.B
+
+    for (i <- 0 until (Params.StateLength >> 2)) {
+      aes.io.input_text(i) := (data.asUInt << (8*i))
+      aes.io.input_text(i+8) := (data2.asUInt << (8*i))
     }
+
+    /*printf("%x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x\n",
+        aes.io.input_text(0), aes.io.input_text(1), 
+        aes.io.input_text(2), aes.io.input_text(3), 
+        aes.io.input_text(4), aes.io.input_text(5), 
+        aes.io.input_text(6), aes.io.input_text(7), 
+        aes.io.input_text(8), aes.io.input_text(9), 
+        aes.io.input_text(10), aes.io.input_text(11), 
+        aes.io.input_text(12), aes.io.input_text(13), 
+        aes.io.input_text(14), aes.io.input_text(15))*/
     when (io.deq.ready) {
       io.deq.valid := true.B
-      //io.deq.bits := data
+      io.deq.bits := data
     } otherwise {
       io.deq.valid := false.B
-      //io.deq.bits := 0.U
+      io.deq.bits := 0.U
     }
   }
 }
