@@ -17,20 +17,43 @@ class Validator[T <: Data](width: UInt, depth: Int) extends Module {
   // value is incremented. If next position is depth then
   // counter is set to 0 again.
   def counter(depth: Int, inc: Bool): (UInt, UInt) = {
-      val cntReg = RegInit(0.U(log2Ceil(depth).W))
-      val nextVal = Mux(cntReg === (depth-1).U, 0.U, cntReg + 1.U)
-      when (inc) {
-          cntReg := nextVal
-      }
-      (cntReg, nextVal)
+    val cntReg = RegInit(0.U(log2Ceil(depth).W))
+    val nextVal = Mux(cntReg === (depth-1).U, 0.U, cntReg + 1.U)
+    when (inc) {
+        cntReg := nextVal
+    }
+    (cntReg, nextVal)
   }
 
+  def MSB(data: UInt): Bool = {
+    if (1.U == data >> 127) {
+      return true.B
+    } else {
+      return false.B
+    }
+  }
+
+  io.deq.valid := false.B
+  io.deq.bits := 0.U
+
   // AES module parameters
+  val const_Rb = 87.U(128.W)
   val Nk: Int = 4
   val unrolled: Int = 0
   val SubBytes_SCD: Boolean = false
   val InvSubBytes_SCD: Boolean = false
   val expandedKeyMemType: String = "Mem"
+
+  val KeyLength: Int = Nk * Params.rows
+  val Nr: Int = Nk + 6 // 10, 12, 14 rounds
+  // !! only one key we will send
+  val Nrplus1: Int = Nr + 1 // 10+1, 12+1, 14+1
+
+  val L = RegInit(VecInit(Seq.fill(Params.StateLength)(0.U(8.W))))
+  val K1 = RegInit(0.U(128.W))
+  val M_i = RegInit(0.U(128.W))
+  val M_i_aes = RegInit(0.U(128.W))
+  val counter = RegInit(0.U)
 
   val aes = AES(Nk, unrolled, SubBytes_SCD, InvSubBytes_SCD, 
                   expandedKeyMemType)
@@ -47,54 +70,81 @@ class Validator[T <: Data](width: UInt, depth: Int) extends Module {
 
   // initialization full flag register
   val full = RegInit(false.B)
+  val key_valid = RegInit(false.B)
   val aes_mode = RegInit(0.U(2.W))
-  val input_vector = VecInit(Seq.fill(Params.StateLength)(0.U(8.W)))
 
   aes.io.AES_mode := aes_mode
-  aes.io.input_text := input_vector
+  aes.io.input_text := L
 
   // when if enq data is valid and fifo is
   // not full then write data into next pos into the memory
   // and then increment the write pointer otherwise
   // sets enqueue not ready state and give output from dequeue
   when (!full) {
-    aes.io.AES_mode := 0.U // aes off when fifo is not full
+    aes_mode := 0.U(2.W)
     io.enq.ready := true.B
     when (io.enq.valid) {
       mem.write(writePtr, io.enq.bits)
       incrWrite := true.B
       full := (nextWrite === 0.U)
     }
-    io.deq.valid := false.B
-    io.deq.bits := 0.U
-  } otherwise {
+    printf()
+  } .otherwise {
     io.enq.ready := false.B
+    when (!key_valid) {
+      // send expanded key to AES memory block
+      //printf("send expanded key to AES memory block\n")
+      aes_mode := 1.U(2.W) // configure key
+      for (i <- 0 until Nrplus1) {
+        for (j <- 0 until Params.StateLength) {
+          aes.io.input_text(j) := Params.expandedKey(i)(j).asUInt
+        }
+      }
+      // Step 1.  L := AES-128(K, const_Zero);
+      aes_mode := 2.U(2.W)
+      aes.io.input_text := L
+      val L_hash = (aes.io.output_text.asUInt() << 1)
+      K1 := Mux(MSB(L_hash), (L_hash ^ const_Rb), (L_hash))
+      //printf("L_hash = 0x%x\n", L_hash)
+      //printf("K1 = 0x%x\n", K1)
+      // here out block size already
+      // multiple of 128 bit so we dont
+      // need K2 calculation
+      aes_mode := 0.U(2.W)
+      key_valid := true.B
+    } .otherwise {
+      counter := Mux(counter === 4.U, 0.U, counter+1.U)
+      incrRead := true.B
+      aes_mode := 2.U(2.W)
+      val data1 = mem.read(nextRead)
+      val data2 = mem.read(nextRead)
+      when (counter === 0.U) //first block
+      {
+        M_i := (data1 << 64) | (data2)
+        for (j <- 0 until (Params.StateLength)) {
+          aes.io.input_text(j) := (M_i >> (8.U*(15.U-j.asUInt)))
+        }
+        M_i_aes := aes.io.output_text.asUInt()
+      } .elsewhen (counter < 3.U) {
+        M_i := ((data1 << 64) | (data2)) ^ M_i_aes
+        for (j <- 0 until (Params.StateLength)) {
+          aes.io.input_text(j) := (M_i >> (8.U*(15.U-j.asUInt)))
+        }
+        M_i_aes := aes.io.output_text.asUInt()
+      } .otherwise {
+        M_i := ((data1 << 64) | (data2)) ^ M_i_aes ^ K1
+        for (j <- 0 until (Params.StateLength)) {
+          aes.io.input_text(j) := (M_i >> (8.U*(15.U-j.asUInt)))
+        }
+        M_i_aes := aes.io.output_text.asUInt()
+      }
+      //printf("K1 = 0x%x\n", M_i_aes)
 
-    val data = mem.read(readPtr)
-    incrRead := true.B
-    val data2 = mem.read(readPtr)
-    incrRead := true.B
-
-    for (i <- 0 until (Params.StateLength >> 2)) {
-      aes.io.input_text(i) := (data.asUInt << (8*i))
-      aes.io.input_text(i+8) := (data2.asUInt << (8*i))
-    }
-
-    /*printf("%x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x\n",
-        aes.io.input_text(0), aes.io.input_text(1), 
-        aes.io.input_text(2), aes.io.input_text(3), 
-        aes.io.input_text(4), aes.io.input_text(5), 
-        aes.io.input_text(6), aes.io.input_text(7), 
-        aes.io.input_text(8), aes.io.input_text(9), 
-        aes.io.input_text(10), aes.io.input_text(11), 
-        aes.io.input_text(12), aes.io.input_text(13), 
-        aes.io.input_text(14), aes.io.input_text(15))*/
-    when (io.deq.ready) {
-      io.deq.valid := true.B
-      io.deq.bits := data
-    } otherwise {
-      io.deq.valid := false.B
-      io.deq.bits := 0.U
+      when (io.deq.ready) {
+        io.deq.valid := true.B
+      } otherwise {
+        io.deq.valid := false.B
+      }
     }
   }
 }

@@ -1,9 +1,9 @@
 from Crypto.Cipher import AES
 
-data = b'safak'
+data = 0
 
-key = b'Sixteen byte key'
-cipher = AES.new(key, AES.MODE_EAX)
+key = 0x123456789abcde
+cipher = AES.new(key, AES.MODE_CMAC)
 
 nonce = cipher.nonce
 ciphertext, tag = cipher.encrypt_and_digest(data)

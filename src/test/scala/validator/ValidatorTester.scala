@@ -28,9 +28,12 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
       dut.clock.step()
     }
     println(s"Wrote ${cnt-1} words")
-    dut.io.enq.ready.expect(false.B)
-    dut.io.deq.valid.expect(false.B)
-    dut.io.deq.bits.asUInt.expect(0.U)
+    for (_ <- 0 until depth) {
+      dut.io.enq.ready.expect(false.B)
+      dut.io.deq.valid.expect(false.B)
+      dut.io.deq.bits.asUInt.expect(0.U)
+      dut.clock.step()
+    }
 
     println("Now read it back")
     // Now read it back
