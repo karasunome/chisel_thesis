@@ -4,7 +4,8 @@
 # sbt looks for default into a folder ./project and . for build.sdt and Build.scala
 # sbt creates per default a ./target folder
 
-SBT = ~/2_safak_tez/sbt/sbt
+# SBT = ~/2_safak_tez/sbt/sbt
+SBT = sbt
 
 
 # Generate Verilog code
