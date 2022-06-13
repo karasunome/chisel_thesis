@@ -61,6 +61,9 @@ class Validator[T <: Data](width: UInt, depth: Int) extends Module {
   // create memory with depth and width
   val mem = Mem(depth, width)
 
+  // create memory for hashes
+  val hashMem = Mem(depth, width)
+
   // Here we set inc value to false and each time same memory 
   // position is returned in read and write pointers.
   val incrRead = WireInit(false.B)
@@ -76,75 +79,54 @@ class Validator[T <: Data](width: UInt, depth: Int) extends Module {
   aes.io.AES_mode := aes_mode
   aes.io.input_text := L
 
+  when (!key_valid) {
+    // send expanded key to AES memory block
+    aes_mode := 1.U(2.W) // configure key
+    for (i <- 0 until Nrplus1) {
+      for (j <- 0 until Params.StateLength) {
+        aes.io.input_text(j) := Params.expandedKey(i)(j).asUInt
+      }
+    }
+    aes_mode := 2.U(2.W)
+    aes.io.input_text := L
+    val L_hash = (aes.io.output_text.asUInt() << 1)
+    K1 := Mux(MSB(L_hash), (L_hash ^ const_Rb), (L_hash))
+    //printf("L_hash = 0x%x\n", L_hash)
+    //printf("K1 = 0x%x\n", K1)
+    // here out block size already
+    // multiple of 128 bit so we dont
+    // need K2 calculation
+    aes_mode := 0.U(2.W)
+    key_valid := true.B
+    printf("K1 = 0x%x\n", K1)
+  }
+
   // when if enq data is valid and fifo is
   // not full then write data into next pos into the memory
   // and then increment the write pointer otherwise
   // sets enqueue not ready state and give output from dequeue
   when (!full) {
-    aes_mode := 0.U(2.W)
+    aes_mode := 2.U(2.W)
     io.enq.ready := true.B
     when (io.enq.valid) {
+      // write 128 bit data into memory
       mem.write(writePtr, io.enq.bits)
+      printf("data = 0x%x\n", io.enq.bits.asUInt)
+      for (j <- 0 until (Params.StateLength)) {
+        aes.io.input_text(j) := (io.enq.bits.asUInt >> (8.U*(15.U-j.asUInt)))
+      }
+      // calculate and store aes hash
+      hashMem.write(writePtr, aes.io.output_text.asUInt)
+      printf("hash = 0x%x\n", aes.io.output_text.asUInt)
       incrWrite := true.B
       full := (nextWrite === 0.U)
     }
-    printf()
   } .otherwise {
     io.enq.ready := false.B
-    when (!key_valid) {
-      // send expanded key to AES memory block
-      //printf("send expanded key to AES memory block\n")
-      aes_mode := 1.U(2.W) // configure key
-      for (i <- 0 until Nrplus1) {
-        for (j <- 0 until Params.StateLength) {
-          aes.io.input_text(j) := Params.expandedKey(i)(j).asUInt
-        }
-      }
-      // Step 1.  L := AES-128(K, const_Zero);
-      aes_mode := 2.U(2.W)
-      aes.io.input_text := L
-      val L_hash = (aes.io.output_text.asUInt() << 1)
-      K1 := Mux(MSB(L_hash), (L_hash ^ const_Rb), (L_hash))
-      //printf("L_hash = 0x%x\n", L_hash)
-      //printf("K1 = 0x%x\n", K1)
-      // here out block size already
-      // multiple of 128 bit so we dont
-      // need K2 calculation
-      aes_mode := 0.U(2.W)
-      key_valid := true.B
-    } .otherwise {
-      counter := Mux(counter === 4.U, 0.U, counter+1.U)
-      incrRead := true.B
-      aes_mode := 2.U(2.W)
-      val data1 = mem.read(nextRead)
-      val data2 = mem.read(nextRead)
-      when (counter === 0.U) //first block
-      {
-        M_i := (data1 << 64) | (data2)
-        for (j <- 0 until (Params.StateLength)) {
-          aes.io.input_text(j) := (M_i >> (8.U*(15.U-j.asUInt)))
-        }
-        M_i_aes := aes.io.output_text.asUInt()
-      } .elsewhen (counter < 3.U) {
-        M_i := ((data1 << 64) | (data2)) ^ M_i_aes
-        for (j <- 0 until (Params.StateLength)) {
-          aes.io.input_text(j) := (M_i >> (8.U*(15.U-j.asUInt)))
-        }
-        M_i_aes := aes.io.output_text.asUInt()
-      } .otherwise {
-        M_i := ((data1 << 64) | (data2)) ^ M_i_aes ^ K1
-        for (j <- 0 until (Params.StateLength)) {
-          aes.io.input_text(j) := (M_i >> (8.U*(15.U-j.asUInt)))
-        }
-        M_i_aes := aes.io.output_text.asUInt()
-      }
-      //printf("K1 = 0x%x\n", M_i_aes)
-
-      when (io.deq.ready) {
-        io.deq.valid := true.B
-      } otherwise {
-        io.deq.valid := false.B
-      }
+    when (io.deq.ready) {
+      io.deq.valid := true.B
+    } otherwise {
+      io.deq.valid := false.B
     }
   }
 }

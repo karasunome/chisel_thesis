@@ -12,7 +12,9 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.io.enq.bits.asUInt.poke(0x0.U)
     dut.io.enq.valid.poke(false.B)
     dut.io.deq.ready.poke(false.B)
-    dut.clock.step()
+
+    //wait 12 clk cycle for cmac K1 key
+    dut.clock.step(16)
   
     // Fill the whole buffer
     // memory depth available as dut.depth.
@@ -25,15 +27,16 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.enq.bits.asUInt.poke(cnt.U)
       if (dut.io.enq.ready.peek.litToBoolean)
         cnt += 1
-      dut.clock.step()
+      
+      //wait 12 clk cycle for aes calculation
+      dut.clock.step(16)
     }
     println(s"Wrote ${cnt-1} words")
-    for (_ <- 0 until depth) {
-      dut.io.enq.ready.expect(false.B)
-      dut.io.deq.valid.expect(false.B)
-      dut.io.deq.bits.asUInt.expect(0.U)
-      dut.clock.step()
-    }
+
+    dut.io.enq.ready.expect(false.B)
+    dut.io.deq.valid.expect(false.B)
+    dut.io.deq.bits.asUInt.expect(0.U)
+    dut.clock.step()
 
     println("Now read it back")
     // Now read it back
