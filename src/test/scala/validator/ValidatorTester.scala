@@ -15,7 +15,7 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.io.deq.ready.poke(false.B)
 
     //wait 12 clk cycle for cmac subkeys
-    dut.clock.step(16)
+    dut.clock.step(8)
   
     // Fill the whole buffer
     // memory depth available as dut.depth.
@@ -29,7 +29,7 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.enq.ready.expect(true.B)
       cnt += 1
       //wait 12 clk cycle for aes calculation
-      dut.clock.step(16)
+      dut.clock.step(4)
     }
     println(s"Wrote ${cnt-1} words")
 

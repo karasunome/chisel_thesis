@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 
 class ValidatorIO[T <: Data](width: Int) extends Bundle {
+  val update_key = Input(Bool())
   val enq = Flipped(new DecoupledIO(UInt(width.W)))
   val deq = new DecoupledIO(UInt(width.W))
 }
@@ -46,29 +47,20 @@ class Validator[T <: Data](width: Int, depth: Int) extends Module {
   val expandedKeyMemType: String = "Mem"
 
   val Nr: Int = Nk + 6 // 10, 12, 14 rounds
-  val Nrplus1: Int = Nr + 1 // 10+1, 12+1, 14+1
+  val Nrplus1: Int = 1// Nr + 1 // 10+1, 12+1, 14+1
 
   val aes = AES(Nk, unrolled, SubBytes_SCD, InvSubBytes_SCD, 
                   expandedKeyMemType)
-  
-  val aes_mode = RegInit(0.U(2.W))
-  val aes_input = RegInit(const_Zero)
-  aes.io.AES_mode := aes_mode
-  aes.io.input_text := aes_input
+  aes.io.AES_mode := 0.U
+  aes.io.input_text := const_Zero
 
   // cmac subkey registers
   val K1 = RegInit(0.U(width.W))
   val K2 = RegInit(0.U(width.W))
-
-  val M_i = RegInit(0.U(width.W))
-  val M_i_aes = RegInit(0.U(width.W))
-
+  val T = RegInit(0.U(width.W))
 
   // create memory with depth and width
   val mem = Mem(depth, UInt(width.W))
-
-  // create memory for hashes
-  val hashMem = Mem(depth, UInt(width.W))
 
   // Here we set inc value to false and each time same memory 
   // position is returned in read and write pointers.
@@ -81,55 +73,65 @@ class Validator[T <: Data](width: Int, depth: Int) extends Module {
   val full = RegInit(false.B)
   val key_valid = RegInit(false.B)
 
-  when (!key_valid) {
+  when (update_key) {
     // send expanded key to AES memory block
-    aes_mode := 1.U
-    for (i <- 0 until Nrplus1) {
-      for (j <- 0 until Params.StateLength) {
-        aes_input(j) := Params.expandedKey(i)(j).asUInt
-      }
-    }
-
-    // calculate subkey
-    aes_mode := 2.U
-    aes_input := const_Zero
-
-    K1 := Mux(MSB(aes.io.output_text.asUInt), ((aes.io.output_text.asUInt << 1) ^ const_Rb), 
-                                               (aes.io.output_text.asUInt << 1))
-    K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
-    aes_mode := 0.U
-    key_valid := true.B
-    printf("K1 = 0x%x\n", K1)
-    printf("K2 = 0x%x\n", K2)
-  }
-
-  // when if enq data is valid and fifo is
-  // not full then write data into next pos into the memory
-  // and then increment the write pointer otherwise
-  // sets enqueue not ready state and give output from dequeue
-  when (!full) {
-    aes_mode := 2.U
     io.enq.ready := true.B
     when (io.enq.valid) {
-      // write 128 bit data into memory
-      mem.write(writePtr, io.enq.bits)
-      printf("data = 0x%x\n", io.enq.bits.asUInt)
+      aes.io.AES_mode := 1.U
       for (j <- 0 until (Params.StateLength)) {
-        aes_input(j) := (io.enq.bits.asUInt >> (8*(15-j)))
+        aes.io.input_text(j) := (io.enq.bits.asUInt >> (8*(15-j)))
       }
-      // calculate and store aes hash
-      hashMem.write(writePtr, aes.io.output_text.asUInt)
-      printf("hash = 0x%x\n", aes.io.output_text.asUInt)
-      incrWrite := true.B
-      full := (nextWrite === 0.U)
     }
-  } .otherwise {
-    aes_mode := 0.U
-    io.enq.ready := false.B
-    when (io.deq.ready) {
-      io.deq.valid := true.B
+  } otherwise {
+    aes.io.AES_mode := 2.U
+    when (!key_valid) {
+      // calculate subkeys
+      aes.io.input_text := const_Zero
+      K1 := Mux(MSB(aes.io.output_text.asUInt), ((aes.io.output_text.asUInt << 1) ^ const_Rb), 
+                                                (aes.io.output_text.asUInt << 1))
+      K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
+      printf("K1 = 0x%x\n", K1)
+      printf("K2 = 0x%x\n", K2)
+      key_valid := true.B
+      aes.io.AES_mode := 0.U
     } otherwise {
-      io.deq.valid := false.B
+      // when if enq data is valid and fifo is
+      // not full then write data into next pos into the memory
+      // and then increment the write pointer otherwise
+      // sets enqueue not ready state and give output from dequeue
+      when (!full) {
+        io.enq.ready := true.B
+        when (io.enq.valid) {
+          // write 128 bit data into memory
+          mem.write(writePtr, io.enq.bits)
+          printf("data = 0x%x\n", io.enq.bits.asUInt)
+          // calculate and store aes hash
+          /*if (writePtr == 0.U) {
+            T := (io.enq.bits.asUInt)
+          } else if (writePtr == (depth-1).U) {
+            T := (io.enq.bits.asUInt ^ T ^ K1)
+          } else {
+            T := (io.enq.bits.asUInt ^ T)
+          }*/
+          //printf("T = 0x%x\n", io.enq.bits.asUInt)
+          for (j <- 0 until (Params.StateLength)) {
+            aes.io.input_text(j) := (io.enq.bits.asUInt >> (8*(15-j)))
+          }
+          printf("hash = 0x%x\n", aes.io.output_text.asUInt)
+          T := aes.io.output_text.asUInt
+          incrWrite := true.B
+          full := (nextWrite === 0.U)
+        }
+      } .otherwise {
+        //aes.io.AES_mode := 0.U
+        printf("final hash = 0x%x\n", T)
+        io.enq.ready := false.B
+        when (io.deq.ready) {
+          io.deq.valid := true.B
+        } otherwise {
+          io.deq.valid := false.B
+        }
+      }
     }
   }
 }
