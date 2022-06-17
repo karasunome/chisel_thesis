@@ -3,12 +3,15 @@ package validator
 import chisel3._
 import chisel3.util._
 
+//safak: dont use ROM mode. ROMKeys cause warnings and removed.
+
 // implements wrapper for AES cipher and inverse cipher
 // change Nk=4 for AES128, NK=6 for AES192, Nk=8 for AES256
 // change expandedKeyMemType= ROM, Mem, SyncReadMem
 class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolean, expandedKeyMemType: String) extends Module {
   require(Nk == 4 || Nk == 6 || Nk == 8)
-  require(expandedKeyMemType == "ROM" || expandedKeyMemType == "Mem" || expandedKeyMemType == "SyncReadMem")
+  // require(expandedKeyMemType == "ROM" || expandedKeyMemType == "Mem" || expandedKeyMemType == "SyncReadMem")
+  require(expandedKeyMemType == "Mem" || expandedKeyMemType == "SyncReadMem")
   val KeyLength: Int = Nk * Params.rows
   val Nr: Int = Nk + 6 // 10, 12, 14 rounds
   val Nrplus1: Int = Nr + 1 // 10+1, 12+1, 14+1
@@ -57,13 +60,14 @@ class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolea
     else if (expandedKeyMemType == "SyncReadMem") {
       dataOut := expandedKeySRMem.read(address)
     }
-    else if (expandedKeyMemType == "ROM") {
-      Nk match {
-        case 4 => dataOut := ROMeKeys.expandedKey128(address)
-        case 6 => dataOut := ROMeKeys.expandedKey192(address)
-        case 8 => dataOut := ROMeKeys.expandedKey256(address)
-      }
-    }
+    // removed warning
+    //else if (expandedKeyMemType == "ROM") {
+    //  Nk match {
+    //    case 4 => dataOut := ROMeKeys.expandedKey128(address)
+    //    case 6 => dataOut := ROMeKeys.expandedKey192(address)
+    //    case 8 => dataOut := ROMeKeys.expandedKey256(address)
+    //  }
+    //}
 
     // address logistics
     when(
