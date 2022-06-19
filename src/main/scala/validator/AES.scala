@@ -118,6 +118,11 @@ class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolea
 
   // Debug statements
   // printf("AES mode=%b, mem_address=%d, mem_dataOut=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, address, dataOut(0), dataOut(1), dataOut(2), dataOut(3), dataOut(4), dataOut(5), dataOut(6), dataOut(7), dataOut(8), dataOut(9), dataOut(10), dataOut(11), dataOut(12), dataOut(13), dataOut(14), dataOut(15))
+  //printf("AES mode=%b, mem_address=%d, hash=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, address, 
+  //      io.output_text(0), io.output_text(1), io.output_text(2), io.output_text(3), 
+  //      io.output_text(4), io.output_text(5), io.output_text(6), io.output_text(7), 
+  //      io.output_text(8), io.output_text(9), io.output_text(10), io.output_text(11), 
+  //      io.output_text(12), io.output_text(13), io.output_text(14), io.output_text(15))
 }
 
 object AES {
