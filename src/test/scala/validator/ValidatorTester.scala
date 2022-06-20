@@ -34,6 +34,7 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     for (i <- 1 until Params.Nrplus1) {
       dut.clock.step(1)
     }
+    //println("output :" + dut.io.deq.bits.litValue)
     println(s"Subkeys generated\n")
 
     dut.io.mode.poke(3.U)
