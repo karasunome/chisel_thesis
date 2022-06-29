@@ -10,8 +10,8 @@ import chisel3.util._
 //   AES Module: https://github.com/hplp/aes_chisel
 
 class ValidatorIO(width: Int) extends Bundle {
-  val mode = Input(UInt(2.W))
   val input_key = Input(Vec(Params.StateLength, UInt(8.W)))
+  val input_key_ready = Input(Bool())
   val enq = Flipped(new DecoupledIO(UInt(width.W)))
   val deq = new DecoupledIO(UInt(width.W))
 }
@@ -69,21 +69,30 @@ class Validator(width: Int, depth: Int) extends Module {
 
   // initialization full flag register
   val full = RegInit(false.B)
+  val state = RegInit(0.U(2.W))
+  val validation = RegInit(false.B)
 
-  when (io.mode === 0.U) { //idle state
+  when (state === 0.U) { //idle state
     io.enq.ready := false.B
     aes.io.AES_mode := 0.U
+    when (io.input_key_ready) {
+      state := 1.U
+    }
     io.deq.valid := false.B
     io.deq.bits := 0.U
-  } .elsewhen (io.mode === 1.U) { //update key state
+  } .elsewhen (state === 1.U) { //update key state
     // this state takes input expanded keys
     // and stores keys into AES module Mem
     io.enq.ready := false.B
-    aes.io.AES_mode := 1.U
-    aes.io.input_text := io.input_key
+    when (io.input_key_ready) {
+      aes.io.AES_mode := 1.U
+      aes.io.input_text := io.input_key
+    } .otherwise {
+      state := 2.U
+    }
     io.deq.valid := false.B
     io.deq.bits := 0.U
-  } .elsewhen (io.mode === 2.U) { // calculate subkeys state
+  } .elsewhen (state === 2.U) { // calculate subkeys state
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     //+                    Algorithm Generate_Subkey                      +
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -108,11 +117,13 @@ class Validator(width: Int, depth: Int) extends Module {
     //+                                                                   +
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++    
     io.enq.ready := false.B
-    io.deq.valid := false.B
     aes.io.AES_mode := 2.U
     K1 := Mux(MSB(aes.io.output_text.asUInt), ((aes.io.output_text.asUInt << 1) ^ const_Rb), 
                                               (aes.io.output_text.asUInt << 1))
     K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
+    when (aes.io.output_valid) {
+      state := 3.U
+    }
     io.deq.valid := false.B
   } .otherwise {
     // when if enq data is valid and fifo is
@@ -151,8 +162,10 @@ class Validator(width: Int, depth: Int) extends Module {
         for (j <- 0 until (Params.StateLength)) {
           aes.io.input_text(j) := (T >> (8*(15-j)))
         }
-        T := aes.io.output_text.asUInt
-        incrWrite := true.B
+        when (aes.io.output_valid) {
+          T := aes.io.output_text.asUInt
+          incrWrite := true.B
+        }
         full := (nextWrite === 0.U)
       }
       io.deq.valid := false.B
@@ -160,17 +173,21 @@ class Validator(width: Int, depth: Int) extends Module {
     } .otherwise {
       io.enq.ready := false.B
       aes.io.AES_mode := 0.U
-      when (io.deq.ready) {
-        // Here input hash value and T are calculated
-        // If the values are equal then gives memory
-        // to dequeue, otherwise dequeue drives invalid
-        //  TODO:
-        io.deq.valid := true.B
-        io.deq.bits.asUInt := mem.read(nextRead)
-        incrRead := true.B
-      } otherwise {
-        io.deq.valid := false.B
-        io.deq.bits.asUInt := 0.U
+      when (io.input_key_ready) {
+        validation := (io.input_key.asUInt === T)
+      } .otherwise {
+        when (io.deq.ready & validation) {
+          // Here input hash value and T are calculated
+          // If the values are equal then gives memory
+          // to dequeue, otherwise dequeue drives invalid
+          //  TODO:
+          io.deq.valid := true.B
+          io.deq.bits.asUInt := mem.read(nextRead)
+          incrRead := true.B
+        } otherwise {
+          io.deq.valid := false.B
+          io.deq.bits.asUInt := 0.U
+        }
       }
     }
   }
