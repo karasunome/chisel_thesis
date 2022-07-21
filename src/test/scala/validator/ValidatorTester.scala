@@ -10,24 +10,28 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
   
   def testFn[T <: Validator](dut: T) = {
     println("Drive default values for all signals")
-    dut.io.mode.poke(0.U)
+
+    dut.io.input_key_ready.poke(false.B)
+    for (j <- 0 until Params.StateLength) {
+      dut.io.input_key(j).poke(0xFF)
+    }
     dut.io.enq.valid.poke(false.B)
     dut.io.deq.ready.poke(false.B)
     dut.clock.step(4)
 
     println("Send expanded key values to aes module")
-    dut.io.mode.poke(1.U)
+    dut.io.input_key_ready.poke(true.B)
     for (i <- 0 until Params.Nrplus1) {
       for (j <- 0 until Params.StateLength) {
         dut.io.input_key(j).poke(Params.expandedKey(i)(j))
       }
       dut.clock.step(1)
     }
-    dut.io.mode.poke(0.U)
+    dut.io.enq.valid.poke(false.B)
+    dut.io.deq.ready.poke(false.B)
     dut.clock.step(4)
     
     println("Calculate subkeys for CMAC")
-    dut.io.mode.poke(2.U)
     dut.clock.step(1)
 
     dut.io.enq.valid.poke(false.B)
@@ -36,8 +40,6 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
     //println("output :" + dut.io.deq.bits.litValue)
     println(s"Subkeys generated\n")
-
-    dut.io.mode.poke(3.U)
     dut.clock.step(4)
   
     //Fill the whole buffer

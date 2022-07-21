@@ -72,14 +72,15 @@ class Validator(width: Int, depth: Int) extends Module {
   val state = RegInit(0.U(2.W))
   val validation = RegInit(false.B)
 
+  io.deq.valid := false.B
+  io.deq.bits := 0.U
+
   when (state === 0.U) { //idle state
     io.enq.ready := false.B
     aes.io.AES_mode := 0.U
     when (io.input_key_ready) {
       state := 1.U
     }
-    io.deq.valid := false.B
-    io.deq.bits := 0.U
   } .elsewhen (state === 1.U) { //update key state
     // this state takes input expanded keys
     // and stores keys into AES module Mem
@@ -87,11 +88,8 @@ class Validator(width: Int, depth: Int) extends Module {
     when (io.input_key_ready) {
       aes.io.AES_mode := 1.U
       aes.io.input_text := io.input_key
-    } .otherwise {
-      state := 2.U
     }
-    io.deq.valid := false.B
-    io.deq.bits := 0.U
+    state := 2.U
   } .elsewhen (state === 2.U) { // calculate subkeys state
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     //+                    Algorithm Generate_Subkey                      +
@@ -122,9 +120,10 @@ class Validator(width: Int, depth: Int) extends Module {
                                               (aes.io.output_text.asUInt << 1))
     K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
     when (aes.io.output_valid) {
+      io.deq.valid := true.B
+      io.deq.bits := K1
       state := 3.U
     }
-    io.deq.valid := false.B
   } .otherwise {
     // when if enq data is valid and fifo is
     // not full then write data into next pos into the memory
@@ -191,4 +190,6 @@ class Validator(width: Int, depth: Int) extends Module {
       }
     }
   }
+  printf("state=0x%x\n", state)
+  printf("K1=0x%x\n", K1)
 }
