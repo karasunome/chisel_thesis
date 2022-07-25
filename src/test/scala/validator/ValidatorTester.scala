@@ -9,11 +9,11 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
   private val width = 128 //bit
   
   def testFn[T <: Validator](dut: T) = {
+    
     println("Drive default values for all signals")
-
     dut.io.input_key_ready.poke(false.B)
     for (j <- 0 until Params.StateLength) {
-      dut.io.input_key(j).poke(0xFF)
+      dut.io.input_key(j).poke(0)
     }
     dut.io.enq.valid.poke(false.B)
     dut.io.deq.ready.poke(false.B)
@@ -29,7 +29,12 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
     dut.io.enq.valid.poke(false.B)
     dut.io.deq.ready.poke(false.B)
-    dut.clock.step(4)
+    dut.io.input_key_ready.poke(false.B)
+    
+    // wait for generate subkeys
+    for (i <- 1 until Params.Nrplus1) {
+      dut.clock.step(1)
+    }
     
     println("Calculate subkeys for CMAC")
     dut.clock.step(1)
@@ -50,10 +55,12 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     var cnt = 1
     dut.io.enq.valid.poke(true.B)
     for (_ <- 0 until depth) {
-     dut.io.enq.bits.asUInt.poke(cnt.U)
-     cnt += 1
+      when (dut.io.enq.ready) {
+        dut.io.enq.bits.asUInt.poke(cnt.U)
+        cnt += 1
+      }
      //wait 12 clk cycle for aes calculation
-     dut.clock.step(4)
+     dut.clock.step(1)
     }
     println(s"Wrote ${cnt-1} words")
 

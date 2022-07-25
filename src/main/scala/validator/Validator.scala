@@ -88,84 +88,39 @@ class Validator(width: Int, depth: Int) extends Module {
     when (io.input_key_ready) {
       aes.io.AES_mode := 1.U
       aes.io.input_text := io.input_key
+    } .otherwise {
+      state := 2.U
     }
-    state := 2.U
-  } .elsewhen (state === 2.U) { // calculate subkeys state
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    //+                    Algorithm Generate_Subkey                      +
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    //+                                                                   +
-    //+   Input    : K (128-bit key)                                      +
-    //+   Output   : K1 (128-bit first subkey)                            +
-    //+              K2 (128-bit second subkey)                           +
-    //+-------------------------------------------------------------------+
-    //+                                                                   +
-    //+   Constants: const_Zero is 0x00000000000000000000000000000000     +
-    //+              const_Rb   is 0x00000000000000000000000000000087     +
-    //+   Variables: L          for output of AES-128 applied to 0^128    +
-    //+                                                                   +
-    //+   Step 1.  L := AES-128(K, const_Zero);                           +
-    //+   Step 2.  if MSB(L) is equal to 0                                +
-    //+            then    K1 := L << 1;                                  +
-    //+            else    K1 := (L << 1) XOR const_Rb;                   +
-    //+   Step 3.  if MSB(K1) is equal to 0                               +
-    //+            then    K2 := K1 << 1;                                 +
-    //+            else    K2 := (K1 << 1) XOR const_Rb;                  +
-    //+   Step 4.  return K1, K2;                                         +
-    //+                                                                   +
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++    
+  } .elsewhen (state === 2.U) { // calculate subkeys state    
     io.enq.ready := false.B
     aes.io.AES_mode := 2.U
-    K1 := Mux(MSB(aes.io.output_text.asUInt), ((aes.io.output_text.asUInt << 1) ^ const_Rb), 
-                                              (aes.io.output_text.asUInt << 1))
-    K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
     when (aes.io.output_valid) {
       io.deq.valid := true.B
       io.deq.bits := K1
+      K1 := Mux(MSB(aes.io.output_text.asUInt), ((aes.io.output_text.asUInt << 1) ^ const_Rb), 
+                                              (aes.io.output_text.asUInt << 1))
+      K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
       state := 3.U
     }
-  } .otherwise {
-    // when if enq data is valid and fifo is
-    // not full then write data into next pos into the memory
-    // and then increment the write pointer otherwise
-    // sets enqueue not ready state and give output from dequeue
-    //  +-----+     +-----+     +-----+
-    //  | M_1 |     | M_2 |     | M_n |    
-    //  +-----+     +-----+     +-----+    
-    //     |           |           |   +--+
-    //     |     +--->(+)    +--->(+)<-|K1|
-    //     |     |     |     |     |   +--+
-    //  +-----+  |  +-----+  |  +-----+     
-    //  |AES_K|  |  |AES_K|  |  |AES_K|     
-    //  +-----+  |  +-----+  |  +-----+     
-    //     |     |     |     |     |        
-    //     +-----+     +-----+     |        
-    //                             |        
-    //                          +-----+     
-    //                          |  T  |     
-    //                          +-----+     
+  } .otherwise {   
     when (!full) {
       io.enq.ready := true.B
-      aes.io.AES_mode := 2.U
       when (io.enq.valid) {
         // write 128 bit data into memory
         mem.write(writePtr, io.enq.bits)
-        // calculate and store aes hash
-        if (writePtr == 0.U) {
-          T := (io.enq.bits.asUInt)
-        } else if (writePtr == (depth-1).U) {
-          T := (io.enq.bits.asUInt ^ T ^ K1)
-        } else {
-          T := (io.enq.bits.asUInt ^ T)
-        }
+        aes.io.AES_mode := 2.U
         for (j <- 0 until (Params.StateLength)) {
           aes.io.input_text(j) := (T >> (8*(15-j)))
         }
         when (aes.io.output_valid) {
           T := aes.io.output_text.asUInt
           incrWrite := true.B
+        } .otherwise {
+          io.enq.ready := false.B
         }
         full := (nextWrite === 0.U)
+      } .otherwise {
+        aes.io.AES_mode := 0.U
       }
       io.deq.valid := false.B
       io.deq.bits := 0.U
@@ -191,5 +146,6 @@ class Validator(width: Int, depth: Int) extends Module {
     }
   }
   printf("state=0x%x\n", state)
+  printf("aes.io.output_text.asUInt=0x%x\n", aes.io.output_text.asUInt)
   printf("K1=0x%x\n", K1)
 }

@@ -10,7 +10,7 @@ import chisel3.util._
 // change expandedKeyMemType= ROM, Mem, SyncReadMem
 class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolean, expandedKeyMemType: String) extends Module {
   require(Nk == 4 || Nk == 6 || Nk == 8)
-  // require(expandedKeyMemType == "ROM" || expandedKeyMemType == "Mem" || expandedKeyMemType == "SyncReadMem")
+  require(expandedKeyMemType == "ROM" || expandedKeyMemType == "Mem" || expandedKeyMemType == "SyncReadMem")
   require(expandedKeyMemType == "Mem" || expandedKeyMemType == "SyncReadMem")
   val KeyLength: Int = Nk * Params.rows
   val Nr: Int = Nk + 6 // 10, 12, 14 rounds
@@ -60,7 +60,6 @@ class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolea
     else if (expandedKeyMemType == "SyncReadMem") {
       dataOut := expandedKeySRMem.read(address)
     }
-    // removed warning
     //else if (expandedKeyMemType == "ROM") {
     //  Nk match {
     //    case 4 => dataOut := ROMeKeys.expandedKey128(address)
@@ -117,8 +116,7 @@ class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolea
   io.output_text <> Mux(CipherModule.io.state_out_valid, CipherModule.io.state_out, InvCipherModule.io.state_out)
 
   // Debug statements
-  // printf("AES mode=%b, mem_address=%d, mem_dataOut=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, address, dataOut(0), dataOut(1), dataOut(2), dataOut(3), dataOut(4), dataOut(5), dataOut(6), dataOut(7), dataOut(8), dataOut(9), dataOut(10), dataOut(11), dataOut(12), dataOut(13), dataOut(14), dataOut(15))
-  //printf("AES mode=%b, mem_address=%d, hash=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, address, 
+  //printf("AES mode=%b, valid=%b, hash=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, io.output_valid,
   //      io.output_text(0), io.output_text(1), io.output_text(2), io.output_text(3), 
   //      io.output_text(4), io.output_text(5), io.output_text(6), io.output_text(7), 
   //      io.output_text(8), io.output_text(9), io.output_text(10), io.output_text(11), 
