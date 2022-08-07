@@ -12,8 +12,8 @@ import chisel3.util._
 class ValidatorIO(width: Int) extends Bundle {
   val input_key = Input(Vec(Params.StateLength, UInt(8.W)))
   val input_key_ready = Input(Bool())
-  val enq = Flipped(new DecoupledIO(UInt(width.W)))
-  val deq = new DecoupledIO(UInt(width.W))
+  val enq = Flipped(new DecoupledIO(Vec(width, UInt(8.W))))
+  val deq = new DecoupledIO(Vec(width, UInt(8.W)))
 }
 
 class Validator(width: Int, depth: Int) extends Module {
@@ -33,11 +33,11 @@ class Validator(width: Int, depth: Int) extends Module {
     (cntReg, nextVal)
   }
 
-  def MSB(data: UInt): Bool = {
-    if (1.U == ((data >> (width-1)) & 1.U)) {
-      return true.B
+  def MSB(data: UInt): UInt = {
+    if (1.U == ((data >> 7) & 1.U)) {
+      return 1.U
     } else {
-      return false.B
+      return 0.U
     }
   }
 
@@ -56,27 +56,25 @@ class Validator(width: Int, depth: Int) extends Module {
   aes.io.input_text := const_Zero
 
   // cmac subkey registers
-  val K1 = RegInit(0.U(width.W))
-  val K2 = RegInit(0.U(width.W))
-  val T = RegInit(0.U(width.W))
+  val K1 = RegInit(VecInit(Seq.fill(Params.StateLength)(0.U(8.W))))
+  val T = RegInit(VecInit(Seq.fill(Params.StateLength)(0.U(8.W))))
 
   // create memory with depth and width
-  val mem = Mem(depth, UInt(width.W))
-  val incrRead = WireInit(false.B)
-  val incrWrite = WireInit(false.B)
-  val (readPtr, nextRead) = counter(depth, incrRead)
-  val (writePtr, nextWrite) = counter(depth, incrWrite)
+  val inc = WireInit(false.B)
+  val (pos, next_pos) = counter(depth, inc)
 
   // initialization full flag register
   val full = RegInit(false.B)
   val state = RegInit(0.U(2.W))
-  val validation = RegInit(false.B)
+  val result = RegInit(false.B)
+  val start = RegInit(false.B)
 
   io.deq.valid := false.B
-  io.deq.bits := 0.U
+  io.deq.bits := VecInit(Seq.fill(Params.StateLength)(0.U(8.W)))
+  io.enq.ready := false.B
 
+  printf("state=0x%x\n", state)
   when (state === 0.U) { //idle state
-    io.enq.ready := false.B
     aes.io.AES_mode := 0.U
     when (io.input_key_ready) {
       state := 1.U
@@ -84,68 +82,60 @@ class Validator(width: Int, depth: Int) extends Module {
   } .elsewhen (state === 1.U) { //update key state
     // this state takes input expanded keys
     // and stores keys into AES module Mem
-    io.enq.ready := false.B
     when (io.input_key_ready) {
       aes.io.AES_mode := 1.U
       aes.io.input_text := io.input_key
+      for (i <- 0 until Params.StateLength) {
+        printf("0x%x ", io.input_key(i))
+      }
+      printf("\n")
     } .otherwise {
       state := 2.U
     }
-  } .elsewhen (state === 2.U) { // calculate subkeys state    
-    io.enq.ready := false.B
-    aes.io.AES_mode := 2.U
-    when (aes.io.output_valid) {
-      io.deq.valid := true.B
-      io.deq.bits := K1
-      K1 := Mux(MSB(aes.io.output_text.asUInt), ((aes.io.output_text.asUInt << 1) ^ const_Rb), 
-                                              (aes.io.output_text.asUInt << 1))
-      K2 := Mux(MSB(K1), ((K1 << 1) ^ const_Rb), (K1 << 1))
+  } .elsewhen (state === 2.U) { // calculate subkeys state
+    aes.io.AES_mode := 0.U
+    when (io.input_key_ready) {
+      K1 := io.input_key
       state := 3.U
     }
-  } .otherwise {   
-    when (!full) {
-      io.enq.ready := true.B
-      when (io.enq.valid) {
-        // write 128 bit data into memory
-        mem.write(writePtr, io.enq.bits)
-        aes.io.AES_mode := 2.U
-        for (j <- 0 until (Params.StateLength)) {
-          aes.io.input_text(j) := (T >> (8*(15-j)))
-        }
-        when (aes.io.output_valid) {
-          T := aes.io.output_text.asUInt
-          incrWrite := true.B
-        } .otherwise {
-          io.enq.ready := false.B
-        }
-        full := (nextWrite === 0.U)
-      } .otherwise {
-        aes.io.AES_mode := 0.U
-      }
-      io.deq.valid := false.B
-      io.deq.bits := 0.U
-    } .otherwise {
-      io.enq.ready := false.B
-      aes.io.AES_mode := 0.U
-      when (io.input_key_ready) {
-        validation := (io.input_key.asUInt === T)
-      } .otherwise {
-        when (io.deq.ready & validation) {
-          // Here input hash value and T are calculated
-          // If the values are equal then gives memory
-          // to dequeue, otherwise dequeue drives invalid
-          //  TODO:
-          io.deq.valid := true.B
-          io.deq.bits.asUInt := mem.read(nextRead)
-          incrRead := true.B
-        } otherwise {
-          io.deq.valid := false.B
-          io.deq.bits.asUInt := 0.U
-        }
-      }
+  } .elsewhen (state === 3.U) {
+    printf("K1=")
+    for (i <- 0 until Params.StateLength) {
+      printf("0x%x ", K1(i))
     }
+    printf("\n")
+    io.enq.ready := !start || aes.io.output_valid
+    when (io.enq.valid) {
+      // write 128 bit data into memory
+      aes.io.AES_mode := 2.U
+      aes.io.input_text := io.enq.bits
+      start := true.B
+      printf("input=")
+      for (i <- 0 until Params.StateLength) {
+        printf("0x%x ", aes.io.input_text(i))
+      }
+      printf("\n")
+      when (aes.io.output_valid) {
+        when (pos === 0.U) {
+          T := aes.io.output_text
+        } .elsewhen (pos === depth.U) {
+          for (i <- 0 until Params.StateLength) {
+            T(i) := aes.io.output_text(i) ^ T(i) ^ K1(i)
+          }
+        } .otherwise {
+          for (i <- 0 until Params.StateLength) {
+            T(i) := aes.io.output_text(i) ^ T(i)
+          }
+        }
+      }
+      full := (next_pos === 0.U)
+    } .otherwise {
+      aes.io.AES_mode := 0.U
+    }
+    printf("T=")
+    for (i <- 0 until Params.StateLength) {
+      printf("0x%x ", T(i))
+    }
+    printf("\n")  
   }
-  printf("state=0x%x\n", state)
-  printf("aes.io.output_text.asUInt=0x%x\n", aes.io.output_text.asUInt)
-  printf("K1=0x%x\n", K1)
 }
