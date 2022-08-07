@@ -17,7 +17,7 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
     dut.io.enq.valid.poke(false.B)
     dut.io.deq.ready.poke(false.B)
-    dut.clock.step(4)
+    dut.clock.step(1)
 
     println("Send expanded key values to aes module")
     dut.io.input_key_ready.poke(true.B)
@@ -36,20 +36,18 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     for (i <- 0 until Params.StateLength) {
       dut.io.input_key(i).poke(Params.K1_key(i))
     }
-    dut.clock.step(1)
+    dut.clock.step(2)
     dut.io.input_key_ready.poke(true.B)
     dut.clock.step(1)
-    println(s"Subkeys sent\n")
   
+    println(s"Subkeys sent\n")
     dut.io.enq.valid.poke(true.B)
     val i = 0
     while (i < InputElf.size) {
-      if (dut.io.enq.ready.peek() == true.B) {
-        println(i)
+      if (dut.io.enq.ready.peek.litToBoolean) {
         for (j <- 0 until Params.StateLength) {
           dut.io.enq.bits(j).poke(InputElf.bytes(i)(j))
         }
-        dut.clock.step(1)
         i + 1
       }
       dut.clock.step(1)

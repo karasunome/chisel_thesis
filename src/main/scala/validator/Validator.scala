@@ -62,10 +62,11 @@ class Validator(width: Int, depth: Int) extends Module {
   // create memory with depth and width
   val inc = WireInit(false.B)
   val (pos, next_pos) = counter(depth, inc)
+  val mem = Mem(depth, Vec(width, UInt(8.W)))
 
   // initialization full flag register
   val full = RegInit(false.B)
-  val state = RegInit(0.U(2.W))
+  val state = RegInit(0.U(3.W))
   val result = RegInit(false.B)
   val start = RegInit(false.B)
 
@@ -73,8 +74,9 @@ class Validator(width: Int, depth: Int) extends Module {
   io.deq.bits := VecInit(Seq.fill(Params.StateLength)(0.U(8.W)))
   io.enq.ready := false.B
 
-  printf("state=0x%x\n", state)
+  //printf("state=0x%x\n", state)
   when (state === 0.U) { //idle state
+    io.enq.ready := false.B
     aes.io.AES_mode := 0.U
     when (io.input_key_ready) {
       state := 1.U
@@ -82,6 +84,7 @@ class Validator(width: Int, depth: Int) extends Module {
   } .elsewhen (state === 1.U) { //update key state
     // this state takes input expanded keys
     // and stores keys into AES module Mem
+    io.enq.ready := false.B
     when (io.input_key_ready) {
       aes.io.AES_mode := 1.U
       aes.io.input_text := io.input_key
@@ -94,27 +97,26 @@ class Validator(width: Int, depth: Int) extends Module {
     }
   } .elsewhen (state === 2.U) { // calculate subkeys state
     aes.io.AES_mode := 0.U
+    io.enq.ready := false.B
     when (io.input_key_ready) {
       K1 := io.input_key
       state := 3.U
+      for (i <- 0 until Params.StateLength) {
+        printf("0x%x ", K1(i))
+      }
+      printf("\n")
     }
   } .elsewhen (state === 3.U) {
-    printf("K1=")
-    for (i <- 0 until Params.StateLength) {
-      printf("0x%x ", K1(i))
-    }
-    printf("\n")
+    //for (i <- 0 until Params.StateLength) {
+    //  printf("0x%x ", io.enq.bits(i))
+    //}
+    //printf("\n")
     io.enq.ready := !start || aes.io.output_valid
     when (io.enq.valid) {
       // write 128 bit data into memory
       aes.io.AES_mode := 2.U
       aes.io.input_text := io.enq.bits
       start := true.B
-      printf("input=")
-      for (i <- 0 until Params.StateLength) {
-        printf("0x%x ", aes.io.input_text(i))
-      }
-      printf("\n")
       when (aes.io.output_valid) {
         when (pos === 0.U) {
           T := aes.io.output_text
@@ -129,13 +131,13 @@ class Validator(width: Int, depth: Int) extends Module {
         }
       }
       full := (next_pos === 0.U)
+      printf("T=")
+      for (i <- 0 until Params.StateLength) {
+        printf("0x%x ", T(i))
+      }
+      printf("\n")
     } .otherwise {
       aes.io.AES_mode := 0.U
-    }
-    printf("T=")
-    for (i <- 0 until Params.StateLength) {
-      printf("0x%x ", T(i))
-    }
-    printf("\n")  
+    }  
   }
 }

@@ -5,10 +5,10 @@ text_sec_size = 0x1000
 text_sec_end = text_sec_start + text_sec_size
 test_loc = "/home/aselsan/2_safak_tez/chisel_thesis/src/test/scala/validator"
 test_name = "InputElfTest.scala"
-elf_loc = "/home/aselsan/2_safak_tez/riscv-tests/isa"
-elf_name = "rv32mi-p-breakpoint"
+elf_loc = "/home/safak/generate_elf_hashes"
+elf_name = "rv32ui-p-add"
 
-testbench_file = open("file1.txt", "w+")
+#testbench_file = open("file1.txt", "w+")
 
 elf_content = np.fromfile(elf_loc+"/"+elf_name,  dtype=np.uint8)
 
