@@ -42,13 +42,14 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
   
     println(s"Subkeys sent\n")
     dut.io.enq.valid.poke(true.B)
-    val i = 0
+
+    var i = 0
     while (i < InputElf.size) {
       if (dut.io.enq.ready.peek.litToBoolean) {
         for (j <- 0 until Params.StateLength) {
           dut.io.enq.bits(j).poke(InputElf.bytes(i)(j))
         }
-        i + 1
+        i = i + 1
       }
       dut.clock.step(1)
     }

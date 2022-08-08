@@ -88,10 +88,10 @@ class Validator(width: Int, depth: Int) extends Module {
     when (io.input_key_ready) {
       aes.io.AES_mode := 1.U
       aes.io.input_text := io.input_key
-      for (i <- 0 until Params.StateLength) {
-        printf("0x%x ", io.input_key(i))
-      }
-      printf("\n")
+      //for (i <- 0 until Params.StateLength) {
+      //  printf("0x%x ", io.input_key(i))
+      //}
+      //printf("\n")
     } .otherwise {
       state := 2.U
     }
@@ -101,10 +101,10 @@ class Validator(width: Int, depth: Int) extends Module {
     when (io.input_key_ready) {
       K1 := io.input_key
       state := 3.U
-      for (i <- 0 until Params.StateLength) {
-        printf("0x%x ", K1(i))
-      }
-      printf("\n")
+      //for (i <- 0 until Params.StateLength) {
+      //  printf("0x%x ", K1(i))
+      //}
+      //printf("\n")
     }
   } .elsewhen (state === 3.U) {
     //for (i <- 0 until Params.StateLength) {
@@ -117,25 +117,33 @@ class Validator(width: Int, depth: Int) extends Module {
       aes.io.AES_mode := 2.U
       aes.io.input_text := io.enq.bits
       start := true.B
-      when (aes.io.output_valid) {
-        when (pos === 0.U) {
-          T := aes.io.output_text
-        } .elsewhen (pos === depth.U) {
-          for (i <- 0 until Params.StateLength) {
-            T(i) := aes.io.output_text(i) ^ T(i) ^ K1(i)
-          }
-        } .otherwise {
-          for (i <- 0 until Params.StateLength) {
-            T(i) := aes.io.output_text(i) ^ T(i)
-          }
-        }
-      }
-      full := (next_pos === 0.U)
-      printf("T=")
       for (i <- 0 until Params.StateLength) {
-        printf("0x%x ", T(i))
+        printf("0x%x ", io.enq.bits(i))
       }
       printf("\n")
+      when (aes.io.output_valid) {
+        //when (pos === 0.U) {
+        //  T := aes.io.output_text
+        //} .elsewhen (pos === depth.U) {
+        //  for (i <- 0 until Params.StateLength) {
+        //    T(i) := aes.io.output_text(i) ^ T(i) ^ K1(i)
+        //  }
+        //} .otherwise {
+        //  for (i <- 0 until Params.StateLength) {
+        //    T(i) := aes.io.output_text(i) ^ T(i)
+        //  }
+        //}
+      }
+      for (i <- 0 until Params.StateLength) {
+        printf("0x%x ", aes.io.output_text(i))
+      }
+      printf("\n")
+      full := (next_pos === 0.U)
+      //printf("T=")
+      //for (i <- 0 until Params.StateLength) {
+      //  printf("0x%x ", T(i))
+      //}
+      //printf("\n")
     } .otherwise {
       aes.io.AES_mode := 0.U
     }  
