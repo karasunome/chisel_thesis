@@ -25,10 +25,9 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     for (i <- 0 until Params.Nrplus1) {
       for (j <- 0 until Params.StateLength) {
         dut.io.input_key(j).poke(Params.expandedKey(i)(j))
-      }
+      }      
       dut.clock.step(1)
     }
-    dut.clock.step(1)
     dut.io.input_key_ready.poke(false.B)
     dut.clock.step(1)
     
@@ -36,7 +35,7 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
     for (i <- 0 until Params.StateLength) {
       dut.io.input_key(i).poke(Params.K1_key(i))
     }
-    dut.clock.step(2)
+    dut.clock.step(1)
     dut.io.input_key_ready.poke(true.B)
     dut.clock.step(1)
   
@@ -50,11 +49,16 @@ class ValidatorSpec extends AnyFlatSpec with ChiselScalatestTester {
           dut.io.enq.bits(j).poke(InputElf.bytes(i)(j))
         }
         i = i + 1
+        dut.clock.step(1)
       }
       dut.clock.step(1)
     }
-
+    
+    for (j <- 0 until Params.StateLength) {
+      dut.clock.step(1)
+    }
   }
+
 
   "Validator Module" should "pass" in {
     test(new Validator(width, depth)) { dut =>

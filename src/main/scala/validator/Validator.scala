@@ -68,7 +68,7 @@ class Validator(width: Int, depth: Int) extends Module {
   val full = RegInit(false.B)
   val state = RegInit(0.U(3.W))
   val result = RegInit(false.B)
-  val start = RegInit(false.B)
+  val busy = RegInit(0.U(2.W))
 
   io.deq.valid := false.B
   io.deq.bits := VecInit(Seq.fill(Params.StateLength)(0.U(8.W)))
@@ -107,45 +107,53 @@ class Validator(width: Int, depth: Int) extends Module {
       //printf("\n")
     }
   } .elsewhen (state === 3.U) {
-    //for (i <- 0 until Params.StateLength) {
-    //  printf("0x%x ", io.enq.bits(i))
-    //}
-    //printf("\n")
-    io.enq.ready := !start || aes.io.output_valid
     when (io.enq.valid) {
       // write 128 bit data into memory
-      aes.io.AES_mode := 2.U
-      aes.io.input_text := io.enq.bits
-      start := true.B
-      for (i <- 0 until Params.StateLength) {
-        printf("0x%x ", io.enq.bits(i))
+      io.enq.ready := !busy
+      when (busy =/= 3.U) {
+        T := io.enq.bits
+        busy := busy + 1.U
+
+        when (pos === 0.U) {
+          T := aes.io.output_text
+        } .elsewhen (pos === depth.U) {
+          for (i <- 0 until Params.StateLength) {
+            T(i) := aes.io.output_text(i) ^ T(i) ^ K1(i)
+          }
+        } .otherwise {
+          for (i <- 0 until Params.StateLength) {
+            T(i) := aes.io.output_text(i) ^ T(i)
+          }
+        }
+        for (i <- 0 until Params.StateLength) {
+          printf("0x%x ", aes.io.output_text(i))
+        }
+        printf("\n")
+      } .otherwise {
+        aes.io.AES_mode := 2.U
+        aes.io.input_text := T
+        printf("in: ")
+        for (i <- 0 until Params.StateLength) {
+          printf("0x%x ", T(i))
+        }
+        printf("\n")
+        when (aes.io.output_valid) {
+          aes.io.AES_mode := 0.U
+          printf("out: ")
+          for (i <- 0 until Params.StateLength) {
+            printf("0x%x ", aes.io.output_text(i))
+          }
+          printf("\n")
+          busy := 0.U
+        }
       }
-      printf("\n")
-      when (aes.io.output_valid) {
-        //when (pos === 0.U) {
-        //  T := aes.io.output_text
-        //} .elsewhen (pos === depth.U) {
-        //  for (i <- 0 until Params.StateLength) {
-        //    T(i) := aes.io.output_text(i) ^ T(i) ^ K1(i)
-        //  }
-        //} .otherwise {
-        //  for (i <- 0 until Params.StateLength) {
-        //    T(i) := aes.io.output_text(i) ^ T(i)
-        //  }
-        //}
-      }
-      for (i <- 0 until Params.StateLength) {
-        printf("0x%x ", aes.io.output_text(i))
-      }
-      printf("\n")
       full := (next_pos === 0.U)
-      //printf("T=")
-      //for (i <- 0 until Params.StateLength) {
-      //  printf("0x%x ", T(i))
-      //}
-      //printf("\n")
-    } .otherwise {
-      aes.io.AES_mode := 0.U
-    }  
+    }
   }
+
+  /*printf("T=")
+  for (i <- 0 until Params.StateLength) {
+    printf("0x%x ", T(i))
+  }
+  printf("\n")*/
 }
