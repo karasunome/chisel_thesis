@@ -106,6 +106,10 @@ class Validator(width: Int, depth: Int) extends Module {
       //  printf("0x%x ", K1(i))
       //}
       //printf("\n")
+      //for (i <- 0 until Params.StateLength) {
+      //  printf("0x%x ", K1(i))
+      //}
+      //printf("\n")
     }
   } .elsewhen (state === 3.U) {
     when (io.enq.valid) {
