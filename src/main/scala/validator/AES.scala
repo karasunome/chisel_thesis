@@ -116,11 +116,11 @@ class AES(Nk: Int, unrolled: Int, SubBytes_SCD: Boolean, InvSubBytes_SCD: Boolea
   io.output_text <> Mux(CipherModule.io.state_out_valid, CipherModule.io.state_out, InvCipherModule.io.state_out)
 
   // Debug statements
-  //printf("AES mode=%b, valid=%b, hash=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, io.output_valid,
-  //      io.output_text(0), io.output_text(1), io.output_text(2), io.output_text(3), 
-  //      io.output_text(4), io.output_text(5), io.output_text(6), io.output_text(7), 
-  //      io.output_text(8), io.output_text(9), io.output_text(10), io.output_text(11), 
-  //      io.output_text(12), io.output_text(13), io.output_text(14), io.output_text(15))
+  printf("AES mode=%b, valid=%b, hash=%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x \n", io.AES_mode, io.output_valid,
+        io.output_text(0), io.output_text(1), io.output_text(2), io.output_text(3), 
+        io.output_text(4), io.output_text(5), io.output_text(6), io.output_text(7), 
+        io.output_text(8), io.output_text(9), io.output_text(10), io.output_text(11), 
+        io.output_text(12), io.output_text(13), io.output_text(14), io.output_text(15))
 }
 
 object AES {
